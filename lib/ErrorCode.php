@@ -2,7 +2,7 @@
 
 class ErrorCode {
     const USERNAME_EXISTS = 1;//用户名已存在
-    const PASSWPRD_CANNOT_EMPTY = 2;//密码不能为空
+    const PASSWORD_CANNOT_EMPTY = 2;//密码不能为空
     const USERNAME_CANNOT_EMPTY = 3;//用户名不能为空
     const REGISTER_FAIL = 4;//用户注册失败
     const USERNAME_OR_PASSWORD_INVALID = 5;//用户或密码错误
@@ -15,4 +15,5 @@ class ErrorCode {
     const ARTICLE_EDIT_FAIL = 12;//文章编辑失败
     const ARTICLE_DELETE_FAIL = 13;//文章删除失败
     const PAGE_SIZE_TO_BIG = 14;//分页数太大
+    const SERVER_INTERNAL_ERROR = 15;//服务内部服务错误
 }

@@ -70,9 +70,9 @@ class Restful
 			$this->_setupRequestMethod();
 			$this->_setupResource();
 			if($this->_resourceName == 'users'){
-			    return $this->_json($this->_handleUser());
+			    $this->_json($this->_handleUser());
 			}else{
-			    return $this->_json($this->_handleArticle());
+			    $this->_json($this->_handleArticle());
 			}
 		} catch (Exception $e) {
 			$this->_json(['error'=>$e->getMessage()],$e->getCode());
@@ -117,11 +117,17 @@ class Restful
 	 * @param $array
 	 */
 	private function _json($array,$code = 0){
-		if($code >0 && $code !=200 && $code != 204){
-		    header('HTTP/1.1 '.$code.' '.$this->_statusCodes[$code]);
+		if($array === null && $code ===0){
+		    $code = 204;
 		}
+		if($array !== null && $code ===0){
+		    $code = 200;
+		}
+		header('HTTP/1.1 '.$code.' '.$this->_statusCodes[$code]);
 		header('Content-Type:application/json;charset=utf8');
-		echo json_encode($array,JSON_UNESCAPED_UNICODE);
+		if($array !== null){
+		    echo json_encode($array,JSON_UNESCAPED_UNICODE);
+		}
 		exit();
 	}
 	/*
@@ -160,6 +166,8 @@ class Restful
 		    }else{
 			return $this->_handleArticleView();
 		    }
+		default:
+		    throw new Exception('请求方法不被允许',405);
 	    }
 	}
 	/*
@@ -171,6 +179,128 @@ class Restful
 	       throw new Exception('请求参数错误',400);
 	    }
 	    return json_decode($raw,true);
+	}
+	/*
+	 * 创建文章
+	 */
+	private function _handleArticleCreate(){
+	    $body = $this->_getbodyParams();
+	    if(empty($body['title'])){
+	        throw new Exception('文章标题不能为空',400);
+	    }
+	    if(empty($body['content'])){
+	        throw new Exception('文章内容不能为空',400);
+	    }
+	    //用户登陆
+	    $user = $this->_userLogin($_SERVER['PHP_AUTH_USER'],$_SERVER['PHP_AUTH_PW']);
+	    try{
+		$article = $this->_article->create($body['title'],$body['content'],$user['user_id']);
+		return $article;
+	    }catch(Exception $e){
+		if(!in_array($e->getCode(),
+		    [
+			ErrorCode::ARTICLE_TITLE_CANNOT_EMPTY,
+			ErrorCode::ARTICLE_CONTENT_CANNOT_EMPTY
+		    ])){
+		    throw new Exception($e->getMessage(),400);
+		}
+		throw new Exception($e->getMessage(),500);
+	    }
+	}
+	/*
+	 * 编辑文章
+	 */
+	private function _handleArticleEdit(){
+	    $user = $this->_userLogin($_SERVER['PHP_AUTH_USER'],$_SERVER['PHP_AUTH_PW']);
+	    try{
+		$article = $this->_article->view($this->_id);
+		if($article['user_id']!= $user['user_id']){
+		    throw new Exception('您没权编辑',403);
+		}
+		$body = $this->_getbodyParams();
+		$title = empty($body['title'])?$article['title']:$body['title'];
+		$content = empty($body['content'])? $article['content'] : $body['content'];
+		if($title == $article['title'] && $content == $article['content']){
+		    return $article;
+		}
+		return $this->_article->edit($article['article_id'],$title,$content,$user['user_id']);
+	    }catch(Exception $e){
+		if($e->getCode()<100){
+		    if($e->getCode() == ErrorCode::ARTICLE_NOT_FOUND){
+		        throw new Exception($e->getMessage(),404);
+		    }else{
+		        throw new Exception($e->getMessage(),400);
+		    }
+		}else{
+		    throw $e;
+		}
+	    }
+	}
+	/*
+	 * 删除文章
+	 */ 
+	private function _handleArticleDelete(){
+	    $user = $this->_userLogin($_SERVER['PHP_AUTH_USER'],$_SERVER['PHP_AUTH_PW']);
+	    try{
+		$article = $this->_article->view($this->_id);
+		if($article['user_id'] != $user['user_id']){
+		    throw new Exception('您无权编辑',403);
+		}
+		$this->_article->delete($article['article_id'],$user['user_id']);
+		return null;
+	    }catch(Exception $e){
+		if($e->getCode()<100){
+		    if($e->getCode() == ErrorCode::ARTICLE_NOT_FOUND){
+			throw new Exception($e->getMessage(),400);
+		    }else{
+			throw new Exception($e->getMessage(),400);
+		    }
+		}else{
+		}
+	    }
+	}
+	/*
+	 * 文章分页列表
+	 */
+	private function _handleArticleList(){
+	    $user = $this->_userLogin($_SERVER['PHP_AUTH_USER'],$_SERVER['PHP_AUTH_PW']);
+	    $page = isset($_GET['page'])? $_GET['page']:1;
+	    $size = isset($_GET['size'])? $_GET['size']:10;
+	    if($size>100){
+		throw new Exception('分页大小最大100',400);
+	    }
+	    return $this->_article->getList($user['user_id'],$page,$size);
+	}
+	/*
+	 * 查看文章
+	 */
+	private function _handleArticleView(){
+	   try{
+		return $this->_article->view($this->_id);
+	   } catch(Exception $e){
+		if($e->getCode() == ErrorCode::ARTICLE_NOT_FOUND){
+		    throw new Exception($e->getMessage(),404);
+		}else{
+		    throw new Exception($e->getMessage(),500);
+		}
+	   }
+	}
+
+	//用户登陆
+	private function _userLogin($PHP_AUTH_USER,$PHP_AUTH_PW){
+	    try{
+	        return $this->_user->login($PHP_AUTH_USER,$PHP_AUTH_PW);
+	    }catch(Exception $e){
+	    	if(in_array($e->getCode(),
+		    [
+			ErrorCode::USERNAME_CANNOT_EMPTY,
+			ErrorCode::PASSWORD_CANNOT_EMPTY,
+			ErrorCode::USERNAME_OR_PASSWORD_INVALID
+		    ])){
+			throw new Exception($e->getMessage(),401);
+		}
+		throw new Exception($e->getMessage(),500);
+	    }		
 	}
 }
 
